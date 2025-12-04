@@ -4,19 +4,35 @@ import { AgentPersona, ProductionStage, SeriesBible, OrchestratorConfig } from "
 
 // Safe environment variable access for client-side execution (Vercel/Vite/CRA)
 const getApiKey = (): string => {
+  let key = '';
+  
   try {
-    // Check for process existence to avoid ReferenceError in strict browser environments
-    if (typeof process !== 'undefined' && process.env) {
-      return process.env.API_KEY || '';
+    // 1. Check standard Node/CRA process.env
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      key = process.env.API_KEY;
     }
   } catch (e) {
-    console.error("Error accessing environment variables:", e);
+    // Ignore error
   }
-  return '';
+
+  if (!key) {
+    try {
+        // 2. Check Vite standard import.meta.env (Needs VITE_ prefix usually)
+        // @ts-ignore
+        if (typeof import.meta !== 'undefined' && import.meta.env) {
+            // @ts-ignore
+            key = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY || '';
+        }
+    } catch (e) {
+        // Ignore error
+    }
+  }
+
+  return key;
 };
 
 const apiKey = getApiKey();
-const ai = new GoogleGenAI({ apiKey });
+const ai = new GoogleGenAI({ apiKey: apiKey || 'fallback_to_force_error_if_empty' }); // Don't crash init, crash call
 
 // Helper for exponential backoff retry
 async function generateWithRetry<T>(
@@ -28,7 +44,8 @@ async function generateWithRetry<T>(
         return await operation();
     } catch (error: any) {
         // If it's an API key error, fail immediately (don't retry)
-        if (error.message?.includes('API key') || error.status === 401 || error.status === 403) {
+        // Check for 400 (Bad Request - typically Invalid Key) or 401/403
+        if (error.toString().includes('API key') || error.status === 400 || error.status === 401 || error.status === 403) {
             throw error;
         }
         if (retries <= 0) throw error;
@@ -38,8 +55,17 @@ async function generateWithRetry<T>(
     }
 }
 
+// Validation Helper
+const validateKeyOrThrow = () => {
+    if (!apiKey) {
+        throw new Error(
+            "API Key is missing. On Vercel, you MUST name your environment variable 'VITE_API_KEY' (with the prefix) for it to be accessible in the browser. Please update your Project Settings and Redeploy."
+        );
+    }
+};
+
 export const generateSeriesBible = async (topic: string, style: string): Promise<SeriesBible> => {
-    if (!apiKey) throw new Error("API Key is missing. Please ensure 'API_KEY' is set in your Vercel Project Settings.");
+    validateKeyOrThrow();
     
     const model = 'gemini-2.5-flash';
     const prompt = `
@@ -83,7 +109,7 @@ export const generateSeriesBible = async (topic: string, style: string): Promise
 };
 
 export const generateAgentPersona = async (role: string, bible: SeriesBible): Promise<AgentPersona> => {
-  if (!apiKey) throw new Error("API Key is missing. Please ensure 'API_KEY' is set in your Vercel Project Settings.");
+  validateKeyOrThrow();
 
   const model = 'gemini-2.5-flash';
   
@@ -146,7 +172,7 @@ export const generateAgentPersona = async (role: string, bible: SeriesBible): Pr
 };
 
 export const generateWorkflow = async (bible: SeriesBible): Promise<ProductionStage[]> => {
-    if (!apiKey) throw new Error("API Key is missing. Please ensure 'API_KEY' is set in your Vercel Project Settings.");
+    validateKeyOrThrow();
 
     const model = 'gemini-2.5-flash';
     const prompt = `
@@ -191,7 +217,7 @@ export const generateWorkflow = async (bible: SeriesBible): Promise<ProductionSt
 };
 
 export const generateOrchestratorConfig = async (): Promise<OrchestratorConfig> => {
-    if (!apiKey) throw new Error("API Key is missing. Please ensure 'API_KEY' is set in your Vercel Project Settings.");
+    validateKeyOrThrow();
 
     const model = 'gemini-2.5-flash';
     const prompt = `
@@ -247,7 +273,7 @@ export const generateOrchestratorConfig = async (): Promise<OrchestratorConfig> 
 };
 
 export const generateExecutionArtifacts = async (orchestrator: OrchestratorConfig, agents: AgentPersona[]): Promise<{dockerCompose: string, bootScript: string, readme: string}> => {
-    if (!apiKey) throw new Error("API Key is missing. Please ensure 'API_KEY' is set in your Vercel Project Settings.");
+    validateKeyOrThrow();
 
     const model = 'gemini-2.5-flash';
     const prompt = `

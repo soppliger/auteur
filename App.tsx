@@ -197,8 +197,8 @@ const App: React.FC = () => {
                 <div className="max-w-3xl mx-auto bg-red-900/20 border border-red-500/50 p-6 rounded-xl flex items-start gap-4 text-left shadow-lg shadow-red-900/20">
                     <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
                     <div>
-                        <h4 className="font-bold text-red-400 mb-1 text-lg">Generation Failed</h4>
-                        <p className="text-sm text-red-200/80 leading-relaxed font-mono">{error}</p>
+                        <h4 className="font-bold text-red-400 mb-1 text-lg">Configuration Error</h4>
+                        <p className="text-sm text-red-200/80 leading-relaxed font-mono break-words">{error}</p>
                     </div>
                 </div>
             )}
@@ -255,7 +255,7 @@ const App: React.FC = () => {
                         )}
                     </button>
                     <p className="text-center text-xs text-gray-500 mt-4">
-                        Requires valid Google Gemini API Key in environment variables.
+                        Requires <code>VITE_API_KEY</code> in environment variables.
                     </p>
                 </div>
             </div>
