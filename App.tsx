@@ -207,19 +207,27 @@ const App: React.FC = () => {
                 <div>
                     <label className="block text-sm font-medium text-gray-400 mb-2">Project Title & Subject</label>
                     <input 
+                        id="projectTopic"
+                        name="projectTopic"
                         type="text" 
                         value={topic}
                         onChange={(e) => setTopic(e.target.value)}
                         className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
+                        autoComplete="off"
+                        data-lpignore="true"
                     />
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-400 mb-2">Visual & Narrative Style</label>
                     <input 
+                        id="projectStyle"
+                        name="projectStyle"
                         type="text" 
                         value={style}
                         onChange={(e) => setStyle(e.target.value)}
                         className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
+                        autoComplete="off"
+                        data-lpignore="true"
                     />
                 </div>
 
