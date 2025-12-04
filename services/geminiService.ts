@@ -2,7 +2,20 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AgentPersona, ProductionStage, SeriesBible, OrchestratorConfig } from "../types";
 
-const apiKey = process.env.API_KEY || '';
+// Safe environment variable access for client-side execution (Vercel/Vite/CRA)
+const getApiKey = (): string => {
+  try {
+    // Check for process existence to avoid ReferenceError in strict browser environments
+    if (typeof process !== 'undefined' && process.env) {
+      return process.env.API_KEY || '';
+    }
+  } catch (e) {
+    console.error("Error accessing environment variables:", e);
+  }
+  return '';
+};
+
+const apiKey = getApiKey();
 const ai = new GoogleGenAI({ apiKey });
 
 // Helper for exponential backoff retry
@@ -13,7 +26,11 @@ async function generateWithRetry<T>(
 ): Promise<T> {
     try {
         return await operation();
-    } catch (error) {
+    } catch (error: any) {
+        // If it's an API key error, fail immediately (don't retry)
+        if (error.message?.includes('API key') || error.status === 401 || error.status === 403) {
+            throw error;
+        }
         if (retries <= 0) throw error;
         console.warn(`Generation failed, retrying in ${delayMs}ms...`, error);
         await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -22,6 +39,8 @@ async function generateWithRetry<T>(
 }
 
 export const generateSeriesBible = async (topic: string, style: string): Promise<SeriesBible> => {
+    if (!apiKey) throw new Error("API Key is missing. Please ensure 'API_KEY' is set in your Vercel Project Settings.");
+    
     const model = 'gemini-2.5-flash';
     const prompt = `
         Create a "Series Bible" for an automated, AI-generated documentary series.
@@ -64,6 +83,8 @@ export const generateSeriesBible = async (topic: string, style: string): Promise
 };
 
 export const generateAgentPersona = async (role: string, bible: SeriesBible): Promise<AgentPersona> => {
+  if (!apiKey) throw new Error("API Key is missing. Please ensure 'API_KEY' is set in your Vercel Project Settings.");
+
   const model = 'gemini-2.5-flash';
   
   const prompt = `
@@ -125,6 +146,8 @@ export const generateAgentPersona = async (role: string, bible: SeriesBible): Pr
 };
 
 export const generateWorkflow = async (bible: SeriesBible): Promise<ProductionStage[]> => {
+    if (!apiKey) throw new Error("API Key is missing. Please ensure 'API_KEY' is set in your Vercel Project Settings.");
+
     const model = 'gemini-2.5-flash';
     const prompt = `
       Outline a strict, step-by-step automated workflow to produce a feature-length documentary based on the Series Bible: "${bible.seriesTitle}".
@@ -168,6 +191,8 @@ export const generateWorkflow = async (bible: SeriesBible): Promise<ProductionSt
 };
 
 export const generateOrchestratorConfig = async (): Promise<OrchestratorConfig> => {
+    if (!apiKey) throw new Error("API Key is missing. Please ensure 'API_KEY' is set in your Vercel Project Settings.");
+
     const model = 'gemini-2.5-flash';
     const prompt = `
         Design the technical specification for the "Orchestrator Engine".
@@ -222,6 +247,8 @@ export const generateOrchestratorConfig = async (): Promise<OrchestratorConfig> 
 };
 
 export const generateExecutionArtifacts = async (orchestrator: OrchestratorConfig, agents: AgentPersona[]): Promise<{dockerCompose: string, bootScript: string, readme: string}> => {
+    if (!apiKey) throw new Error("API Key is missing. Please ensure 'API_KEY' is set in your Vercel Project Settings.");
+
     const model = 'gemini-2.5-flash';
     const prompt = `
         Create the ACTUAL execution code for this autonomous movie studio.

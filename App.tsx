@@ -131,8 +131,9 @@ const App: React.FC = () => {
         setView(ViewState.JSON); // Jump straight to Artifacts for immediate action
     } catch (e: any) {
         console.error("Generation pipeline failed:", e);
-        setError(e.message || "An unexpected error occurred during the generation process. Please check your API key and try again.");
+        setError(e.message || "An unexpected error occurred during the generation process.");
         setIsGenerating(false);
+        // Do NOT change view, stay on Setup to show error
     }
   };
 
@@ -193,11 +194,11 @@ const App: React.FC = () => {
             </div>
 
             {error && (
-                <div className="max-w-3xl mx-auto bg-red-900/20 border border-red-500/50 p-4 rounded-xl flex items-start gap-4 text-left">
+                <div className="max-w-3xl mx-auto bg-red-900/20 border border-red-500/50 p-6 rounded-xl flex items-start gap-4 text-left shadow-lg shadow-red-900/20">
                     <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
                     <div>
-                        <h4 className="font-bold text-red-400 mb-1">Generation Failed</h4>
-                        <p className="text-sm text-red-200/80">{error}</p>
+                        <h4 className="font-bold text-red-400 mb-1 text-lg">Generation Failed</h4>
+                        <p className="text-sm text-red-200/80 leading-relaxed font-mono">{error}</p>
                     </div>
                 </div>
             )}
