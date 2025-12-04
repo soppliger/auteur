@@ -1,18 +1,19 @@
 
 import React, { useState } from 'react';
-import { ViewState, AgentPersona, CostItem, MasterBlueprint, SeriesBible, OrchestratorConfig } from './types';
+import { ViewState, AgentPersona, CostItem, MasterBlueprint, SeriesBible, OrchestratorConfig, LogEntry } from './types';
 import { generateAgentPersona, generateWorkflow, generateSeriesBible, generateOrchestratorConfig, generateExecutionArtifacts } from './services/geminiService';
 import AgentCard from './components/AgentCard';
 import CostBreakdown from './components/CostBreakdown';
 import BlueprintView from './components/BlueprintView';
 import WorkflowTimeline from './components/WorkflowTimeline';
 import SystemArchitecture from './components/SystemArchitecture';
+import GenerationProgress from './components/GenerationProgress';
 import { Clapperboard, Users, Wallet, FileJson, Sparkles, Film, ArrowRight, Loader2, BookOpen, Cpu, AlertCircle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>(ViewState.SETUP);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [loadingText, setLoadingText] = useState("");
+  const [generationLogs, setGenerationLogs] = useState<LogEntry[]>([]);
+  const [currentAction, setCurrentAction] = useState("");
   const [error, setError] = useState<string | null>(null);
   
   // Data State
@@ -20,40 +21,61 @@ const App: React.FC = () => {
   const [style, setStyle] = useState("Hyper-realistic CGI mixed with AI Narrators");
   const [blueprint, setBlueprint] = useState<MasterBlueprint | null>(null);
 
+  const addLog = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+      setGenerationLogs(prev => [...prev, { timestamp: new Date(), message, type }]);
+  };
+
   const handleGenerate = async () => {
-    setIsGenerating(true);
+    setView(ViewState.GENERATING);
     setError(null);
+    setGenerationLogs([]);
     
     try {
         // 1. Generate Series Bible
-        setLoadingText("Establish Series DNA (Series Bible)...");
+        setCurrentAction("Synthesizing Narrative DNA...");
+        addLog("Initializing secure connection to Gemini API...");
+        addLog(`Requesting Series Bible for topic: "${topic}"...`);
+        
         const bible: SeriesBible = await generateSeriesBible(topic, style);
+        addLog(`Series Bible Established: "${bible.seriesTitle}"`, 'success');
+        addLog(`Visual Language: ${bible.visualLanguage}`, 'info');
 
         // 2. Generate Orchestrator OS
-        setLoadingText("Booting Auteur-OS Kernel...");
+        setCurrentAction("Booting Auteur-OS Kernel...");
+        addLog("Designing Orchestrator Architecture and Memory Crystal Protocols...");
         const orchestrator: OrchestratorConfig = await generateOrchestratorConfig();
+        addLog(`Orchestrator Configured: ${orchestrator.systemName} (${orchestrator.architecture})`, 'success');
 
         // 3. Generate Agents
-        setLoadingText("Recruiting Modular AI Crew...");
+        setCurrentAction("Recruiting Modular AI Crew...");
+        addLog("Provisioning autonomous agent containers...");
         const roles = ["Director/Showrunner", "Lead Screenwriter", "Cinematographer (Veo)", "Sound & Narrator Designer", "Editor (FFmpeg)"];
         const agents: AgentPersona[] = [];
         
         for (const role of roles) {
-        setLoadingText(`Configuring Agent: ${role}...`);
-        const agent = await generateAgentPersona(role, bible);
-        agents.push(agent);
+            setCurrentAction(`Configuring Agent: ${role}...`);
+            addLog(`Generating Persona & System Prompts for: ${role}...`);
+            const agent = await generateAgentPersona(role, bible);
+            agents.push(agent);
+            addLog(`Agent Provisioned: ${agent.role} [${agent.model}]`, 'success');
         }
 
         // 4. Generate Workflow
-        setLoadingText("Designing Production Pipeline...");
+        setCurrentAction("Designing Production Pipeline...");
+        addLog("Mapping sequential production stages...");
         const workflow = await generateWorkflow(bible);
+        addLog(`Pipeline Mapped: ${workflow.length} unique production stages`, 'success');
 
         // 5. Generate Execution Code (Docker/Python)
-        setLoadingText("Compiling Execution Artifacts...");
+        setCurrentAction("Compiling Execution Artifacts...");
+        addLog("Generating docker-compose.yml manifest...");
+        addLog("Writing python bootloader scripts...");
         const artifacts = await generateExecutionArtifacts(orchestrator, agents);
+        addLog("Execution Artifacts Compiled Successfully", 'success');
 
         // 6. Calculate Cost
-        setLoadingText("Optimizing Cost Schedule...");
+        setCurrentAction("Optimizing Cost Schedule...");
+        addLog("Calculating token budget and rendering costs...");
         
         const runtimeMinutes = 90;
         const estScenes = 60; 
@@ -127,26 +149,35 @@ const App: React.FC = () => {
         };
 
         setBlueprint(masterPlan);
-        setIsGenerating(false);
-        setView(ViewState.JSON); // Jump straight to Artifacts for immediate action
+        addLog("Initialization Complete. Launching Dashboard...", 'success');
+        
+        // Small delay so user can see "Complete"
+        setTimeout(() => {
+             setView(ViewState.JSON); 
+        }, 1500);
+
     } catch (e: any) {
         console.error("Generation pipeline failed:", e);
         setError(e.message || "An unexpected error occurred during the generation process.");
-        setIsGenerating(false);
-        // Do NOT change view, stay on Setup to show error
+        addLog(`FATAL ERROR: ${e.message}`, 'error');
+        // Stay on GENERATING view but show error state (or allow user to go back)
+        // For now, let's just let the log show the error.
+        setTimeout(() => {
+            setView(ViewState.SETUP); // Return to setup to retry
+        }, 4000);
     }
   };
 
   const NavButton = ({ target, icon: Icon, label }: { target: ViewState, icon: any, label: string }) => (
     <button
       onClick={() => setView(target)}
-      disabled={!blueprint && target !== ViewState.SETUP}
+      disabled={(!blueprint && target !== ViewState.SETUP) || view === ViewState.GENERATING}
       className={`flex items-center gap-2 px-4 py-3 rounded-lg font-medium transition-all
         ${view === target 
           ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/50' 
           : 'text-gray-400 hover:text-white hover:bg-gray-800'
         }
-        ${!blueprint && target !== ViewState.SETUP ? 'opacity-50 cursor-not-allowed' : ''}
+        ${(!blueprint && target !== ViewState.SETUP) || view === ViewState.GENERATING ? 'opacity-50 cursor-not-allowed' : ''}
       `}
     >
       <Icon className="w-4 h-4" />
@@ -234,25 +265,12 @@ const App: React.FC = () => {
                 <div className="pt-4">
                     <button
                         onClick={handleGenerate}
-                        disabled={isGenerating}
                         className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all
-                            ${isGenerating 
-                                ? 'bg-gray-800 text-gray-400 cursor-not-allowed' 
-                                : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg hover:shadow-purple-500/25'
-                            }
+                            bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg hover:shadow-purple-500/25
                         `}
                     >
-                        {isGenerating ? (
-                            <>
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                                {loadingText}
-                            </>
-                        ) : (
-                            <>
-                                <Sparkles className="w-5 h-5" />
-                                Generate Master Plan
-                            </>
-                        )}
+                        <Sparkles className="w-5 h-5" />
+                        Initialize Autonomous Studio
                     </button>
                     <p className="text-center text-xs text-gray-500 mt-4">
                         Requires <code>VITE_API_KEY</code> in environment variables.
@@ -260,6 +278,11 @@ const App: React.FC = () => {
                 </div>
             </div>
           </div>
+        )}
+
+        {/* GENERATING VIEW */}
+        {view === ViewState.GENERATING && (
+            <GenerationProgress logs={generationLogs} currentStep={currentAction} />
         )}
 
         {/* SYSTEM VIEW */}

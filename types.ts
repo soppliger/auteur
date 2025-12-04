@@ -71,8 +71,15 @@ export interface MasterBlueprint {
   readme: string;
 }
 
+export interface LogEntry {
+    timestamp: Date;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+}
+
 export enum ViewState {
   SETUP = 'SETUP',
+  GENERATING = 'GENERATING',
   AGENTS = 'AGENTS',
   WORKFLOW = 'WORKFLOW',
   COST = 'COST',
