@@ -1,12 +1,13 @@
 
 import React, { useState } from 'react';
-import { ViewState, AgentPersona, CostItem, MasterBlueprint, SeriesBible } from './types';
-import { generateAgentPersona, generateWorkflow, generateSeriesBible } from './services/geminiService';
+import { ViewState, AgentPersona, CostItem, MasterBlueprint, SeriesBible, OrchestratorConfig } from './types';
+import { generateAgentPersona, generateWorkflow, generateSeriesBible, generateOrchestratorConfig, generateExecutionArtifacts } from './services/geminiService';
 import AgentCard from './components/AgentCard';
 import CostBreakdown from './components/CostBreakdown';
 import BlueprintView from './components/BlueprintView';
 import WorkflowTimeline from './components/WorkflowTimeline';
-import { Clapperboard, Users, Wallet, FileJson, Sparkles, Film, ArrowRight, Loader2, BookOpen } from 'lucide-react';
+import SystemArchitecture from './components/SystemArchitecture';
+import { Clapperboard, Users, Wallet, FileJson, Sparkles, Film, ArrowRight, Loader2, BookOpen, Cpu } from 'lucide-react';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>(ViewState.SETUP);
@@ -21,11 +22,15 @@ const App: React.FC = () => {
   const handleGenerate = async () => {
     setIsGenerating(true);
     
-    // 1. Generate Series Bible (The Modular Foundation)
+    // 1. Generate Series Bible
     setLoadingText("Establish Series DNA (Series Bible)...");
     const bible: SeriesBible = await generateSeriesBible(topic, style);
 
-    // 2. Generate Agents (Context-Aware)
+    // 2. Generate Orchestrator OS
+    setLoadingText("Booting Auteur-OS Kernel...");
+    const orchestrator: OrchestratorConfig = await generateOrchestratorConfig();
+
+    // 3. Generate Agents
     setLoadingText("Recruiting Modular AI Crew...");
     const roles = ["Director/Showrunner", "Lead Screenwriter", "Cinematographer (Veo)", "Sound & Narrator Designer", "Editor (FFmpeg)"];
     const agents: AgentPersona[] = [];
@@ -36,32 +41,27 @@ const App: React.FC = () => {
       agents.push(agent);
     }
 
-    // 3. Generate Workflow (Execution Steps)
+    // 4. Generate Workflow
     setLoadingText("Designing Production Pipeline...");
     const workflow = await generateWorkflow(bible);
 
-    // 4. Calculate Cost (Detailed & Optimized)
+    // 5. Generate Execution Code (Docker/Python)
+    setLoadingText("Compiling Execution Artifacts...");
+    const artifacts = await generateExecutionArtifacts(orchestrator, agents);
+
+    // 6. Calculate Cost
     setLoadingText("Optimizing Cost Schedule...");
     
     const runtimeMinutes = 90;
     const estScenes = 60; 
     const avgShotLengthSec = 4;
-    const totalShots = (runtimeMinutes * 60) / avgShotLengthSec;
-    
-    // Cost assumptions (Hypothetical API costs for estimation)
     const costPerVeoSec = 0.08; 
-    const costPer1kTokensPro = 0.0000025; // gemini-3-pro
-    const costPer1kTokensFlash = 0.0000001; // gemini-2.5-flash
+    const costPer1kTokensPro = 0.0000025; 
+    const costPer1kTokensFlash = 0.0000001; 
     
-    // Logic: 
-    // - Screenwriting uses Pro (high reasoning)
-    // - Storyboarding uses Flash Image
-    // - Video Gen uses Veo (most expensive)
-    // - Editing Logic uses Flash (efficient)
-
-    const scriptTokens = 100000; // Large context for full script
-    const reasoningTokens = 500000; // Agent chatter/reasoning
-    const imageGenCount = estScenes * 3; // 3 options per scene
+    const scriptTokens = 100000;
+    const reasoningTokens = 500000; 
+    const imageGenCount = estScenes * 3; 
 
     const budget: CostItem[] = [
         { 
@@ -95,7 +95,7 @@ const App: React.FC = () => {
         { 
             category: "Audio", 
             description: "Neural TTS & SFX Generation", 
-            unitCost: 0.002, // per minute
+            unitCost: 0.002, 
             quantity: runtimeMinutes, 
             total: runtimeMinutes * 0.002 
         },
@@ -116,12 +116,16 @@ const App: React.FC = () => {
         seriesBible: bible,
         agents,
         workflow,
-        budget
+        budget,
+        orchestrator,
+        dockerCompose: artifacts.dockerCompose,
+        bootScript: artifacts.bootScript,
+        readme: artifacts.readme
     };
 
     setBlueprint(masterPlan);
     setIsGenerating(false);
-    setView(ViewState.AGENTS);
+    setView(ViewState.JSON); // Jump straight to Artifacts for immediate action
   };
 
   const NavButton = ({ target, icon: Icon, label }: { target: ViewState, icon: any, label: string }) => (
@@ -157,10 +161,11 @@ const App: React.FC = () => {
           </div>
           <div className="flex gap-2">
             <NavButton target={ViewState.SETUP} icon={Sparkles} label="Setup" />
+            <NavButton target={ViewState.SYSTEM} icon={Cpu} label="System" />
             <NavButton target={ViewState.AGENTS} icon={Users} label="Agents" />
             <NavButton target={ViewState.WORKFLOW} icon={Film} label="Workflow" />
             <NavButton target={ViewState.COST} icon={Wallet} label="Budget" />
-            <NavButton target={ViewState.JSON} icon={FileJson} label="Blueprint" />
+            <NavButton target={ViewState.JSON} icon={FileJson} label="Execution" />
           </div>
         </div>
       </header>
@@ -230,6 +235,11 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* SYSTEM VIEW */}
+        {view === ViewState.SYSTEM && blueprint && (
+            <SystemArchitecture config={blueprint.orchestrator} />
+        )}
+
         {/* AGENTS VIEW */}
         {view === ViewState.AGENTS && blueprint && (
           <div className="animate-fadeIn">
@@ -294,7 +304,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* BLUEPRINT VIEW */}
+        {/* BLUEPRINT / EXECUTION VIEW */}
         {view === ViewState.JSON && blueprint && (
             <BlueprintView blueprint={blueprint} />
         )}

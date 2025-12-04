@@ -10,7 +10,7 @@ export interface AgentPersona {
   model: string;
   temperature: number;
   systemPrompt: string;
-  tools: string[];
+  tools: string[]; // Specific MCP servers or Libraries
   description: string;
   contextConfig: ContextConfig;
 }
@@ -39,6 +39,22 @@ export interface SeriesBible {
     episodicFormat: string;
 }
 
+export interface ContextLifecyclePolicy {
+    monitorFrequency: string;
+    signalProtocol: string;
+    crystalSchema: string;
+    restorationProcess: string;
+    errorHandling: string; // New: Strategy for invalid JSON/State
+}
+
+export interface OrchestratorConfig {
+    systemName: string;
+    architecture: string;
+    healthCheckPort: number; // New: Monitoring port
+    contextPolicy: ContextLifecyclePolicy;
+    storageMounts: string[];
+}
+
 export interface MasterBlueprint {
   title: string;
   logline: string;
@@ -48,6 +64,11 @@ export interface MasterBlueprint {
   agents: AgentPersona[];
   workflow: ProductionStage[];
   budget: CostItem[];
+  orchestrator: OrchestratorConfig;
+  // Execution Artifacts
+  dockerCompose: string;
+  bootScript: string; 
+  readme: string;
 }
 
 export enum ViewState {
@@ -55,5 +76,6 @@ export enum ViewState {
   AGENTS = 'AGENTS',
   WORKFLOW = 'WORKFLOW',
   COST = 'COST',
+  SYSTEM = 'SYSTEM',
   JSON = 'JSON'
 }
