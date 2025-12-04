@@ -7,12 +7,13 @@ import CostBreakdown from './components/CostBreakdown';
 import BlueprintView from './components/BlueprintView';
 import WorkflowTimeline from './components/WorkflowTimeline';
 import SystemArchitecture from './components/SystemArchitecture';
-import { Clapperboard, Users, Wallet, FileJson, Sparkles, Film, ArrowRight, Loader2, BookOpen, Cpu } from 'lucide-react';
+import { Clapperboard, Users, Wallet, FileJson, Sparkles, Film, ArrowRight, Loader2, BookOpen, Cpu, AlertCircle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>(ViewState.SETUP);
   const [isGenerating, setIsGenerating] = useState(false);
   const [loadingText, setLoadingText] = useState("");
+  const [error, setError] = useState<string | null>(null);
   
   // Data State
   const [topic, setTopic] = useState("Jupiter: The Storm Giant");
@@ -21,111 +22,118 @@ const App: React.FC = () => {
 
   const handleGenerate = async () => {
     setIsGenerating(true);
+    setError(null);
     
-    // 1. Generate Series Bible
-    setLoadingText("Establish Series DNA (Series Bible)...");
-    const bible: SeriesBible = await generateSeriesBible(topic, style);
+    try {
+        // 1. Generate Series Bible
+        setLoadingText("Establish Series DNA (Series Bible)...");
+        const bible: SeriesBible = await generateSeriesBible(topic, style);
 
-    // 2. Generate Orchestrator OS
-    setLoadingText("Booting Auteur-OS Kernel...");
-    const orchestrator: OrchestratorConfig = await generateOrchestratorConfig();
+        // 2. Generate Orchestrator OS
+        setLoadingText("Booting Auteur-OS Kernel...");
+        const orchestrator: OrchestratorConfig = await generateOrchestratorConfig();
 
-    // 3. Generate Agents
-    setLoadingText("Recruiting Modular AI Crew...");
-    const roles = ["Director/Showrunner", "Lead Screenwriter", "Cinematographer (Veo)", "Sound & Narrator Designer", "Editor (FFmpeg)"];
-    const agents: AgentPersona[] = [];
-    
-    for (const role of roles) {
-      setLoadingText(`Configuring Agent: ${role}...`);
-      const agent = await generateAgentPersona(role, bible);
-      agents.push(agent);
+        // 3. Generate Agents
+        setLoadingText("Recruiting Modular AI Crew...");
+        const roles = ["Director/Showrunner", "Lead Screenwriter", "Cinematographer (Veo)", "Sound & Narrator Designer", "Editor (FFmpeg)"];
+        const agents: AgentPersona[] = [];
+        
+        for (const role of roles) {
+        setLoadingText(`Configuring Agent: ${role}...`);
+        const agent = await generateAgentPersona(role, bible);
+        agents.push(agent);
+        }
+
+        // 4. Generate Workflow
+        setLoadingText("Designing Production Pipeline...");
+        const workflow = await generateWorkflow(bible);
+
+        // 5. Generate Execution Code (Docker/Python)
+        setLoadingText("Compiling Execution Artifacts...");
+        const artifacts = await generateExecutionArtifacts(orchestrator, agents);
+
+        // 6. Calculate Cost
+        setLoadingText("Optimizing Cost Schedule...");
+        
+        const runtimeMinutes = 90;
+        const estScenes = 60; 
+        const avgShotLengthSec = 4;
+        const costPerVeoSec = 0.08; 
+        const costPer1kTokensPro = 0.0000025; 
+        const costPer1kTokensFlash = 0.0000001; 
+        
+        const scriptTokens = 100000;
+        const reasoningTokens = 500000; 
+        const imageGenCount = estScenes * 3; 
+
+        const budget: CostItem[] = [
+            { 
+                category: "Pre-Production", 
+                description: "Gemini 3 Pro (Scripting & Research)", 
+                unitCost: costPer1kTokensPro, 
+                quantity: scriptTokens + reasoningTokens, 
+                total: (scriptTokens + reasoningTokens) * costPer1kTokensPro 
+            },
+            { 
+                category: "Orchestration", 
+                description: "Gemini 2.5 Flash (Agent Coordination)", 
+                unitCost: costPer1kTokensFlash, 
+                quantity: 2000000, 
+                total: 2000000 * costPer1kTokensFlash 
+            },
+            { 
+                category: "Visuals", 
+                description: "Veo 3.1 (Video Generation - 75% Coverage)", 
+                unitCost: costPerVeoSec, 
+                quantity: (runtimeMinutes * 60) * 0.75, 
+                total: ((runtimeMinutes * 60) * 0.75) * costPerVeoSec 
+            },
+            { 
+                category: "Visuals", 
+                description: "Imagen 4 (Static Plates/Storyboards)", 
+                unitCost: 0.04, 
+                quantity: imageGenCount, 
+                total: imageGenCount * 0.04 
+            },
+            { 
+                category: "Audio", 
+                description: "Neural TTS & SFX Generation", 
+                unitCost: 0.002, 
+                quantity: runtimeMinutes, 
+                total: runtimeMinutes * 0.002 
+            },
+            { 
+                category: "Infrastructure", 
+                description: "Cloud Rendering/Storage (Fixed Est)", 
+                unitCost: 5.00, 
+                quantity: 1, 
+                total: 5.00 
+            },
+        ];
+
+        const masterPlan: MasterBlueprint = {
+            title: bible.seriesTitle || topic,
+            logline: `A ${bible.narrativeTone.toLowerCase()} exploration of ${topic}, visualized through ${bible.visualLanguage}.`,
+            style: style,
+            runtime: runtimeMinutes,
+            seriesBible: bible,
+            agents,
+            workflow,
+            budget,
+            orchestrator,
+            dockerCompose: artifacts.dockerCompose,
+            bootScript: artifacts.bootScript,
+            readme: artifacts.readme
+        };
+
+        setBlueprint(masterPlan);
+        setIsGenerating(false);
+        setView(ViewState.JSON); // Jump straight to Artifacts for immediate action
+    } catch (e: any) {
+        console.error("Generation pipeline failed:", e);
+        setError(e.message || "An unexpected error occurred during the generation process. Please check your API key and try again.");
+        setIsGenerating(false);
     }
-
-    // 4. Generate Workflow
-    setLoadingText("Designing Production Pipeline...");
-    const workflow = await generateWorkflow(bible);
-
-    // 5. Generate Execution Code (Docker/Python)
-    setLoadingText("Compiling Execution Artifacts...");
-    const artifacts = await generateExecutionArtifacts(orchestrator, agents);
-
-    // 6. Calculate Cost
-    setLoadingText("Optimizing Cost Schedule...");
-    
-    const runtimeMinutes = 90;
-    const estScenes = 60; 
-    const avgShotLengthSec = 4;
-    const costPerVeoSec = 0.08; 
-    const costPer1kTokensPro = 0.0000025; 
-    const costPer1kTokensFlash = 0.0000001; 
-    
-    const scriptTokens = 100000;
-    const reasoningTokens = 500000; 
-    const imageGenCount = estScenes * 3; 
-
-    const budget: CostItem[] = [
-        { 
-            category: "Pre-Production", 
-            description: "Gemini 3 Pro (Scripting & Research)", 
-            unitCost: costPer1kTokensPro, 
-            quantity: scriptTokens + reasoningTokens, 
-            total: (scriptTokens + reasoningTokens) * costPer1kTokensPro 
-        },
-        { 
-            category: "Orchestration", 
-            description: "Gemini 2.5 Flash (Agent Coordination)", 
-            unitCost: costPer1kTokensFlash, 
-            quantity: 2000000, 
-            total: 2000000 * costPer1kTokensFlash 
-        },
-        { 
-            category: "Visuals", 
-            description: "Veo 3.1 (Video Generation - 75% Coverage)", 
-            unitCost: costPerVeoSec, 
-            quantity: (runtimeMinutes * 60) * 0.75, 
-            total: ((runtimeMinutes * 60) * 0.75) * costPerVeoSec 
-        },
-        { 
-            category: "Visuals", 
-            description: "Imagen 4 (Static Plates/Storyboards)", 
-            unitCost: 0.04, 
-            quantity: imageGenCount, 
-            total: imageGenCount * 0.04 
-        },
-        { 
-            category: "Audio", 
-            description: "Neural TTS & SFX Generation", 
-            unitCost: 0.002, 
-            quantity: runtimeMinutes, 
-            total: runtimeMinutes * 0.002 
-        },
-        { 
-            category: "Infrastructure", 
-            description: "Cloud Rendering/Storage (Fixed Est)", 
-            unitCost: 5.00, 
-            quantity: 1, 
-            total: 5.00 
-        },
-    ];
-
-    const masterPlan: MasterBlueprint = {
-        title: bible.seriesTitle || topic,
-        logline: `A ${bible.narrativeTone.toLowerCase()} exploration of ${topic}, visualized through ${bible.visualLanguage}.`,
-        style: style,
-        runtime: runtimeMinutes,
-        seriesBible: bible,
-        agents,
-        workflow,
-        budget,
-        orchestrator,
-        dockerCompose: artifacts.dockerCompose,
-        bootScript: artifacts.bootScript,
-        readme: artifacts.readme
-    };
-
-    setBlueprint(masterPlan);
-    setIsGenerating(false);
-    setView(ViewState.JSON); // Jump straight to Artifacts for immediate action
   };
 
   const NavButton = ({ target, icon: Icon, label }: { target: ViewState, icon: any, label: string }) => (
@@ -183,6 +191,16 @@ const App: React.FC = () => {
                 Define your vision. Our swarm of Gemini agents will architect a complete documentary production plan, from script to screen.
                 </p>
             </div>
+
+            {error && (
+                <div className="max-w-3xl mx-auto bg-red-900/20 border border-red-500/50 p-4 rounded-xl flex items-start gap-4 text-left">
+                    <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                        <h4 className="font-bold text-red-400 mb-1">Generation Failed</h4>
+                        <p className="text-sm text-red-200/80">{error}</p>
+                    </div>
+                </div>
+            )}
 
             <div className="glass-panel p-8 rounded-2xl border border-purple-500/20 shadow-2xl shadow-purple-900/20 text-left space-y-6">
                 <div>

@@ -1,9 +1,25 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { AgentPersona, ProductionStage, SeriesBible, OrchestratorConfig, MasterBlueprint } from "../types";
+import { AgentPersona, ProductionStage, SeriesBible, OrchestratorConfig } from "../types";
 
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
+
+// Helper for exponential backoff retry
+async function generateWithRetry<T>(
+    operation: () => Promise<T>,
+    retries: number = 3,
+    delayMs: number = 1000
+): Promise<T> {
+    try {
+        return await operation();
+    } catch (error) {
+        if (retries <= 0) throw error;
+        console.warn(`Generation failed, retrying in ${delayMs}ms...`, error);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        return generateWithRetry(operation, retries - 1, delayMs * 2);
+    }
+}
 
 export const generateSeriesBible = async (topic: string, style: string): Promise<SeriesBible> => {
     const model = 'gemini-2.5-flash';
@@ -23,7 +39,7 @@ export const generateSeriesBible = async (topic: string, style: string): Promise
         - episodicFormat: Structure of a single episode (e.g., Cold Open -> Title -> Act 1...).
     `;
 
-    try {
+    return generateWithRetry(async () => {
         const response = await ai.models.generateContent({
             model,
             contents: prompt,
@@ -42,18 +58,9 @@ export const generateSeriesBible = async (topic: string, style: string): Promise
             }
         });
         const text = response.text;
-        if (!text) throw new Error("No response for Bible");
+        if (!text) throw new Error("No text returned for Series Bible");
         return JSON.parse(text) as SeriesBible;
-    } catch (error) {
-        console.error("Error generating bible", error);
-        return {
-            seriesTitle: topic,
-            visualLanguage: "Cinematic, 8k, Unreal Engine 5 style",
-            narrativeTone: "Authoritative and Wondrous",
-            recurringMotifs: ["Slow motion planetary flybys", "Data visualization overlays"],
-            episodicFormat: "Standard 3-Act Structure"
-        };
-    }
+    });
 };
 
 export const generateAgentPersona = async (role: string, bible: SeriesBible): Promise<AgentPersona> => {
@@ -83,7 +90,7 @@ export const generateAgentPersona = async (role: string, bible: SeriesBible): Pr
       }
   `;
 
-  try {
+  return generateWithRetry(async () => {
     const response = await ai.models.generateContent({
       model,
       contents: prompt,
@@ -112,24 +119,9 @@ export const generateAgentPersona = async (role: string, bible: SeriesBible): Pr
     });
 
     const text = response.text;
-    if (!text) throw new Error("No response from Gemini");
+    if (!text) throw new Error(`No response for Agent: ${role}`);
     return JSON.parse(text) as AgentPersona;
-  } catch (error) {
-    console.error(`Error generating persona for ${role}:`, error);
-    return {
-      role,
-      model: "gemini-2.5-flash",
-      temperature: 0.7,
-      systemPrompt: "You are an expert " + role,
-      tools: ["PIP: standard-lib"],
-      description: "Fallback generation.",
-      contextConfig: {
-          windowSize: 1000000,
-          threshold: 0.4,
-          migrationProcedure: "Standard 40% Flush: Save state.json, restart."
-      }
-    };
-  }
+  });
 };
 
 export const generateWorkflow = async (bible: SeriesBible): Promise<ProductionStage[]> => {
@@ -147,7 +139,7 @@ export const generateWorkflow = async (bible: SeriesBible): Promise<ProductionSt
       - description: string
     `;
 
-    try {
+    return generateWithRetry(async () => {
         const response = await ai.models.generateContent({
             model,
             contents: prompt,
@@ -169,13 +161,10 @@ export const generateWorkflow = async (bible: SeriesBible): Promise<ProductionSt
         });
         
         const text = response.text;
-        if (!text) throw new Error("No response");
+        if (!text) throw new Error("No response for Workflow");
         const stages = JSON.parse(text) as Omit<ProductionStage, 'status'>[];
         return stages.map(s => ({ ...s, status: 'pending' }));
-    } catch (error) {
-        console.error("Error generating workflow", error);
-        return [];
-    }
+    });
 };
 
 export const generateOrchestratorConfig = async (): Promise<OrchestratorConfig> => {
@@ -199,7 +188,7 @@ export const generateOrchestratorConfig = async (): Promise<OrchestratorConfig> 
         - storageMounts: array of strings
     `;
 
-    try {
+    return generateWithRetry(async () => {
         const response = await ai.models.generateContent({
             model,
             contents: prompt,
@@ -227,24 +216,9 @@ export const generateOrchestratorConfig = async (): Promise<OrchestratorConfig> 
             }
         });
         const text = response.text;
-        if (!text) throw new Error("No response for Orchestrator");
+        if (!text) throw new Error("No response for Orchestrator Config");
         return JSON.parse(text) as OrchestratorConfig;
-    } catch (error) {
-        console.error("Error generating orchestrator", error);
-        return {
-            systemName: "Auteur-OS Kernel",
-            architecture: "Docker Swarm",
-            healthCheckPort: 8080,
-            contextPolicy: {
-                monitorFrequency: "10s",
-                signalProtocol: "SIG_CTX_40",
-                crystalSchema: "Standard",
-                restorationProcess: "Hot-swap",
-                errorHandling: "Validation failure triggers immediate rollback."
-            },
-            storageMounts: ["/data/crystals"]
-        };
-    }
+    });
 };
 
 export const generateExecutionArtifacts = async (orchestrator: OrchestratorConfig, agents: AgentPersona[]): Promise<{dockerCompose: string, bootScript: string, readme: string}> => {
@@ -271,7 +245,7 @@ export const generateExecutionArtifacts = async (orchestrator: OrchestratorConfi
         Return JSON with keys: dockerCompose, bootScript, readme.
     `;
     
-    try {
+    return generateWithRetry(async () => {
         const response = await ai.models.generateContent({
             model,
             contents: prompt,
@@ -288,14 +262,7 @@ export const generateExecutionArtifacts = async (orchestrator: OrchestratorConfi
             }
         });
         const text = response.text;
-        if (!text) throw new Error("No response for artifacts");
+        if (!text) throw new Error("No response for Execution Artifacts");
         return JSON.parse(text);
-    } catch (e) {
-        console.error(e);
-        return {
-            dockerCompose: "# Error generating docker-compose",
-            bootScript: "# Error generating boot script",
-            readme: "# Error generating readme"
-        };
-    }
+    });
 }
