@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { AgentPersona, ProductionStage, SeriesBible, OrchestratorConfig } from "../types";
+import { AgentPersona, ProductionStage, SeriesBible, OrchestratorConfig, ContextConfig } from "../types";
 
 // Safe environment variable access for client-side execution (Vercel/Vite/CRA)
 const getApiKey = (): string => {
@@ -34,6 +34,36 @@ const getApiKey = (): string => {
 const apiKey = getApiKey();
 const ai = new GoogleGenAI({ apiKey: apiKey || 'fallback_to_force_error_if_empty' }); // Don't crash init, crash call
 
+// --- STATIC PLATFORM LOGIC ---
+// As per requirements, System Architecture and Context Protocols are now 
+// built-in platform logic, not generated AI content.
+
+const STATIC_CONTEXT_CONFIG: ContextConfig = {
+    windowSize: 2000000,
+    threshold: 0.4,
+    migrationProcedure: "Standard Auteur-OS 'Memory Crystal' Protocol (Lempel-Ziv-Welch Compression + Vector Embedding)"
+};
+
+const STATIC_ORCHESTRATOR_CONFIG: OrchestratorConfig = {
+    systemName: "Auteur-OS Core v3.1",
+    architecture: "Event-Driven Microservices Swarm (Docker/K8s)",
+    healthCheckPort: 8080,
+    contextPolicy: {
+        monitorFrequency: "Continuous (100ms Polling)",
+        signalProtocol: "SIG_CTX_SATURATION (Signal 30)",
+        crystalSchema: "Auteur_Memory_Crystal_v2.schema.json",
+        restorationProcess: "Container Rehydration from Vector Store",
+        errorHandling: "Automatic Circuit Breaking & Last-Good-State Rollback"
+    },
+    storageMounts: [
+        "/var/lib/auteur/crystals",
+        "/var/lib/auteur/logs",
+        "/var/lib/auteur/output"
+    ]
+};
+
+// -----------------------------
+
 // Helper for exponential backoff retry
 async function generateWithRetry<T>(
     operation: () => Promise<T>,
@@ -48,6 +78,13 @@ async function generateWithRetry<T>(
         if (error.toString().includes('API key') || error.status === 400 || error.status === 401 || error.status === 403) {
             throw error;
         }
+        // Specific check for JSON syntax errors (often caused by truncation or markdown)
+        if (error instanceof SyntaxError) {
+             console.warn("JSON Parse Error caught, retrying...", error);
+        } else if (retries <= 0) {
+            throw error;
+        }
+
         if (retries <= 0) throw error;
         console.warn(`Generation failed, retrying in ${delayMs}ms...`, error);
         await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -62,6 +99,12 @@ const validateKeyOrThrow = () => {
             "API Key is missing. On Vercel, you MUST name your environment variable 'VITE_API_KEY' (with the prefix) for it to be accessible in the browser. Please update your Project Settings and Redeploy."
         );
     }
+};
+
+const safeJsonParse = (text: string) => {
+    // Remove markdown code blocks if present
+    const cleanText = text.replace(/```json\n?|\n?```/g, "").trim();
+    return JSON.parse(cleanText);
 };
 
 export const generateSeriesBible = async (topic: string, style: string): Promise<SeriesBible> => {
@@ -104,7 +147,7 @@ export const generateSeriesBible = async (topic: string, style: string): Promise
         });
         const text = response.text;
         if (!text) throw new Error("No text returned for Series Bible");
-        return JSON.parse(text) as SeriesBible;
+        return safeJsonParse(text) as SeriesBible;
     });
 };
 
@@ -113,6 +156,8 @@ export const generateAgentPersona = async (role: string, bible: SeriesBible): Pr
 
   const model = 'gemini-2.5-flash';
   
+  // NOTE: We do NOT ask the AI to generate Context Config anymore.
+  // It is injected from the static platform logic below.
   const prompt = `
     Design an autonomous AI agent persona for the role of ${role} for the documentary series "${bible.seriesTitle}".
     
@@ -120,21 +165,13 @@ export const generateAgentPersona = async (role: string, bible: SeriesBible): Pr
     TOOLS: List REAL, PROVISIONABLE tools only. Use "MCP: [server_name]" for Model Context Protocol servers or "PIP: [package_name]" for Python libs.
     Examples: "MCP: filesystem", "MCP: google-search", "PIP: ffmpeg-python", "PIP: beautifulsoup4".
     
-    MEMORY MANAGEMENT:
-    Define strict rules for the "Memory Crystal" protocol (saving state at 40% context).
-    
     Return JSON with:
     - role: string
     - model: Specific Gemini model (use 'gemini-3-pro-preview' for logic/writing, 'veo-3.1' for video).
     - temperature: number
-    - systemPrompt: Expert-level prompt including memory protocol.
-    - tools: array of strings (e.g., "MCP: fetch", "PIP: pandas").
-    - description: responsibilities.
-    - contextConfig: {
-        windowSize: number,
-        threshold: number (MUST be 0.4),
-        migrationProcedure: string
-      }
+    - systemPrompt: Expert-level prompt outlining their specific duties.
+    - tools: array of strings.
+    - description: Short description of responsibilities.
   `;
 
   return generateWithRetry(async () => {
@@ -152,14 +189,7 @@ export const generateAgentPersona = async (role: string, bible: SeriesBible): Pr
             systemPrompt: { type: Type.STRING },
             tools: { type: Type.ARRAY, items: { type: Type.STRING } },
             description: { type: Type.STRING },
-            contextConfig: {
-                type: Type.OBJECT,
-                properties: {
-                    windowSize: { type: Type.INTEGER },
-                    threshold: { type: Type.NUMBER },
-                    migrationProcedure: { type: Type.STRING }
-                }
-            }
+            // contextConfig removed from schema, injected manually
           },
         },
       },
@@ -167,7 +197,14 @@ export const generateAgentPersona = async (role: string, bible: SeriesBible): Pr
 
     const text = response.text;
     if (!text) throw new Error(`No response for Agent: ${role}`);
-    return JSON.parse(text) as AgentPersona;
+    
+    const partialAgent = safeJsonParse(text);
+    
+    // Inject Platform Logic
+    return {
+        ...partialAgent,
+        contextConfig: STATIC_CONTEXT_CONFIG
+    } as AgentPersona;
   });
 };
 
@@ -211,64 +248,19 @@ export const generateWorkflow = async (bible: SeriesBible): Promise<ProductionSt
         
         const text = response.text;
         if (!text) throw new Error("No response for Workflow");
-        const stages = JSON.parse(text) as Omit<ProductionStage, 'status'>[];
+        const stages = safeJsonParse(text) as Omit<ProductionStage, 'status'>[];
         return stages.map(s => ({ ...s, status: 'pending' }));
     });
 };
 
 export const generateOrchestratorConfig = async (): Promise<OrchestratorConfig> => {
-    validateKeyOrThrow();
-
-    const model = 'gemini-2.5-flash';
-    const prompt = `
-        Design the technical specification for the "Orchestrator Engine".
-        
-        CRITICAL: Include a JSON Watchdog that validates the blueprint schema before execution.
-        
-        Return JSON with:
-        - systemName: string
-        - architecture: string
-        - healthCheckPort: integer (e.g., 8080)
-        - contextPolicy: {
-            monitorFrequency: string,
-            signalProtocol: string,
-            crystalSchema: string,
-            restorationProcess: string,
-            errorHandling: string (How to handle corrupt JSON or failed agents)
-        }
-        - storageMounts: array of strings
-    `;
-
-    return generateWithRetry(async () => {
-        const response = await ai.models.generateContent({
-            model,
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        systemName: { type: Type.STRING },
-                        architecture: { type: Type.STRING },
-                        healthCheckPort: { type: Type.INTEGER },
-                        contextPolicy: {
-                            type: Type.OBJECT,
-                            properties: {
-                                monitorFrequency: { type: Type.STRING },
-                                signalProtocol: { type: Type.STRING },
-                                crystalSchema: { type: Type.STRING },
-                                restorationProcess: { type: Type.STRING },
-                                errorHandling: { type: Type.STRING }
-                            }
-                        },
-                        storageMounts: { type: Type.ARRAY, items: { type: Type.STRING } }
-                    }
-                }
-            }
-        });
-        const text = response.text;
-        if (!text) throw new Error("No response for Orchestrator Config");
-        return JSON.parse(text) as OrchestratorConfig;
+    // Platform Logic: The Orchestrator architecture is now static and robust.
+    // No API call required, removing the "booting" delay.
+    // We wrap in a short timeout just to allow the UI to show the step briefly.
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            resolve(STATIC_ORCHESTRATOR_CONFIG);
+        }, 800); 
     });
 };
 
@@ -276,26 +268,28 @@ export const generateExecutionArtifacts = async (orchestrator: OrchestratorConfi
     validateKeyOrThrow();
 
     const model = 'gemini-2.5-flash';
+    // Optimized prompt to keep output concise and avoid token limits
     const prompt = `
         Create the ACTUAL execution code for this autonomous movie studio.
         
         System: ${orchestrator.systemName}
-        Agents: ${agents.length} agents (${agents.map(a => a.role).join(', ')})
+        Agents: ${agents.length} agents
         
         Requirement 1: docker-compose.yml
-        - Define services for each agent + the orchestrator.
-        - Mount the './blueprint.json' to the orchestrator.
-        - Ensure networking.
+        - Define services for each agent + orchestrator.
+        - Mount './blueprint.json' to orchestrator.
+        - Use "image: python:3.9-slim" for simplicity.
         
         Requirement 2: boot_orchestrator.py
-        - Python script to be the entrypoint for the Orchestrator service.
-        - MUST include a function 'validate_blueprint(json_data)' that checks if 'agents' list exists.
-        - Start an infinite loop monitoring agent health on port ${orchestrator.healthCheckPort}.
+        - Python script entrypoint.
+        - Function 'validate_blueprint(json_data)' checking 'agents' list.
+        - Infinite loop on port ${orchestrator.healthCheckPort}.
         
         Requirement 3: README.md
-        - Step-by-step instructions on how to run 'docker-compose up'.
+        - VERY CONCISE instructions (max 10 lines) on how to run 'docker-compose up'.
         
         Return JSON with keys: dockerCompose, bootScript, readme.
+        IMPORTANT: Escape all newlines in the JSON strings.
     `;
     
     return generateWithRetry(async () => {
@@ -316,6 +310,6 @@ export const generateExecutionArtifacts = async (orchestrator: OrchestratorConfi
         });
         const text = response.text;
         if (!text) throw new Error("No response for Execution Artifacts");
-        return JSON.parse(text);
+        return safeJsonParse(text);
     });
 }

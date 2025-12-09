@@ -1,14 +1,14 @@
 
 import React, { useState } from 'react';
 import { MasterBlueprint } from '../types';
-import { Copy, Download, FileJson, Terminal, Play, ShieldCheck, Check } from 'lucide-react';
+import { Copy, Download, FileJson, Terminal, Play, ShieldCheck, Check, LayoutGrid, ArrowRight } from 'lucide-react';
 
 interface Props {
   blueprint: MasterBlueprint | null;
 }
 
 const BlueprintView: React.FC<Props> = ({ blueprint }) => {
-  const [activeTab, setActiveTab] = useState<'json' | 'docker' | 'python' | 'readme'>('readme');
+  const [activeTab, setActiveTab] = useState<string>('summary');
 
   if (!blueprint) return <div className="text-gray-500 italic">No blueprint generated yet.</div>;
 
@@ -22,12 +22,38 @@ const BlueprintView: React.FC<Props> = ({ blueprint }) => {
     node.remove();
   };
 
-  const tabs = [
-    { id: 'readme', label: 'README.md', icon: ShieldCheck, content: blueprint.readme },
-    { id: 'docker', label: 'docker-compose.yml', icon:  Terminal, content: blueprint.dockerCompose },
-    { id: 'python', label: 'boot_orchestrator.py', icon: Play, content: blueprint.bootScript },
-    { id: 'json', label: 'blueprint.json', icon: FileJson, content: JSON.stringify(blueprint, null, 2) },
+  const artifacts = [
+    { 
+        id: 'readme', 
+        label: 'README.md', 
+        icon: ShieldCheck, 
+        content: blueprint.readme, 
+        description: "Essential setup instructions and deployment commands." 
+    },
+    { 
+        id: 'docker', 
+        label: 'docker-compose.yml', 
+        icon: Terminal, 
+        content: blueprint.dockerCompose, 
+        description: "Container orchestration configuration for the agent swarm." 
+    },
+    { 
+        id: 'python', 
+        label: 'boot_orchestrator.py', 
+        icon: Play, 
+        content: blueprint.bootScript, 
+        description: "Main Python entrypoint script to bootstrap the Auteur OS." 
+    },
+    { 
+        id: 'json', 
+        label: 'blueprint.json', 
+        icon: FileJson, 
+        content: JSON.stringify(blueprint, null, 2), 
+        description: "The complete machine-readable master plan and data structure." 
+    },
   ];
+
+  const activeArtifact = artifacts.find(a => a.id === activeTab);
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -45,49 +71,90 @@ const BlueprintView: React.FC<Props> = ({ blueprint }) => {
 
       <div className="glass-panel rounded-xl overflow-hidden border border-gray-700 flex flex-col h-[600px]">
         {/* Tab Header */}
-        <div className="bg-gray-900/50 border-b border-gray-700 flex">
-            {tabs.map(tab => (
+        <div className="bg-gray-900/50 border-b border-gray-700 flex overflow-x-auto">
+            <button
+                onClick={() => setActiveTab('summary')}
+                className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors border-r border-gray-700 whitespace-nowrap
+                    ${activeTab === 'summary' 
+                        ? 'bg-gray-800 text-white border-b-2 border-b-purple-500' 
+                        : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                    }
+                `}
+            >
+                <LayoutGrid className="w-4 h-4" />
+                Summary
+            </button>
+            {artifacts.map(art => (
                 <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors border-r border-gray-700
-                        ${activeTab === tab.id 
+                    key={art.id}
+                    onClick={() => setActiveTab(art.id)}
+                    className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors border-r border-gray-700 whitespace-nowrap
+                        ${activeTab === art.id 
                             ? 'bg-gray-800 text-white border-b-2 border-b-purple-500' 
                             : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                         }
                     `}
                 >
-                    <tab.icon className="w-4 h-4" />
-                    {tab.label}
+                    <art.icon className="w-4 h-4" />
+                    {art.label}
                 </button>
             ))}
         </div>
 
         {/* Content Area */}
         <div className="flex-1 overflow-hidden relative group bg-[#1e1e1e]">
-             {/* Action Bar */}
-             <div className="absolute top-4 right-4 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button 
-                    onClick={() => navigator.clipboard.writeText(tabs.find(t => t.id === activeTab)?.content || "")}
-                    className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-white shadow-lg"
-                    title="Copy to Clipboard"
-                >
-                    <Copy className="w-4 h-4" />
-                </button>
-                <button 
-                    onClick={() => {
-                        const tab = tabs.find(t => t.id === activeTab);
-                        if(tab) handleDownload(tab.content, tab.id === 'json' ? 'blueprint.json' : tab.label);
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-500 rounded text-white text-xs font-bold shadow-lg"
-                >
-                    <Download className="w-3 h-3" /> Download File
-                </button>
-            </div>
+             {activeTab === 'summary' ? (
+                 <div className="p-8 h-full overflow-y-auto bg-gray-900/50">
+                     <h3 className="text-xl font-bold text-white mb-6">Project Deliverables</h3>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         {artifacts.map((art) => (
+                             <button
+                                key={art.id}
+                                onClick={() => setActiveTab(art.id)}
+                                className="flex items-start gap-4 p-5 rounded-xl border border-gray-700 bg-gray-800/50 hover:bg-gray-800 hover:border-purple-500/50 transition-all text-left group/card"
+                             >
+                                 <div className="p-3 bg-gray-900 rounded-lg text-purple-400 group-hover/card:text-purple-300 border border-gray-700">
+                                     <art.icon className="w-6 h-6" />
+                                 </div>
+                                 <div className="flex-1">
+                                     <div className="flex justify-between items-center mb-1">
+                                         <h4 className="font-bold text-white">{art.label}</h4>
+                                         <ArrowRight className="w-4 h-4 text-gray-600 group-hover/card:text-purple-400 transition-colors" />
+                                     </div>
+                                     <p className="text-sm text-gray-400 leading-relaxed">
+                                         {art.description}
+                                     </p>
+                                 </div>
+                             </button>
+                         ))}
+                     </div>
+                 </div>
+             ) : (
+                <>
+                    {/* Action Bar for Code View */}
+                    <div className="absolute top-4 right-4 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                            onClick={() => navigator.clipboard.writeText(activeArtifact?.content || "")}
+                            className="p-2 bg-gray-700 hover:bg-gray-600 rounded text-white shadow-lg"
+                            title="Copy to Clipboard"
+                        >
+                            <Copy className="w-4 h-4" />
+                        </button>
+                        <button 
+                            onClick={() => {
+                                if(activeArtifact) handleDownload(activeArtifact.content, activeArtifact.id === 'json' ? 'blueprint.json' : activeArtifact.label);
+                            }}
+                            className="flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-500 rounded text-white text-xs font-bold shadow-lg"
+                        >
+                            <Download className="w-3 h-3" /> Download File
+                        </button>
+                    </div>
 
-            <pre className="p-6 text-sm font-mono text-gray-300 overflow-auto h-full w-full leading-relaxed">
-                {tabs.find(t => t.id === activeTab)?.content}
-            </pre>
+                    <pre className="p-6 text-sm font-mono text-gray-300 overflow-auto h-full w-full leading-relaxed">
+                        {activeArtifact?.content}
+                    </pre>
+                </>
+             )}
         </div>
       </div>
 
